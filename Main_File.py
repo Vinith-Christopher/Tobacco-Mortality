@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
+from Models_ import *
 
 
 def Preprocessing():
@@ -51,7 +52,54 @@ def Preprocessing():
         except:
             df[col] = df[col].astype(str)
             df[col] = le.fit_transform(df[col])
-    np.save('features_enhanced.npy', features)
+    np.save('features.npy', features)
     np.save('labels.npy', labels)
 
 
+def cross_validate_method(method_class, method_name, X, y, folds=5):
+    kf = KFold(n_splits=folds, shuffle=True, random_state=42)
+    all_metrics = []
+    for train_index, test_index in kf.split(X):
+        xtrain, xtest = X[train_index], X[test_index]
+        ytrain, ytest = y[train_index], y[test_index]
+
+        model_instance = method_class(xtrain, xtest, ytrain, ytest)
+        method = getattr(model_instance, method_name)
+        metrics = method()
+        all_metrics.append(metrics)
+
+    metric_ = np.mean(all_metrics, axis=0).tolist()
+    return metric_
+
+
+
+def Analysis():
+    feat = np.load('features.npy', allow_pickle=True)
+    lab = np.load('labels.npy')
+    feat = feat.astype('float32')
+    scaler = StandardScaler()
+    feat = scaler.fit_transform(feat)
+    oversample = SMOTE()
+    feat, lab = oversample.fit_resample(feat, lab)
+
+    C1 = cross_validate_method(METHODS_, 'Logistic_Regression', feat, lab, folds=5)
+    C2 = cross_validate_method(METHODS_, 'Decision_Tree', feat, lab, folds=5)
+    C3 = cross_validate_method(METHODS_, 'Random_Forest', feat, lab, folds=5)
+    C4 = cross_validate_method(METHODS_, 'MLP_', feat, lab, folds=5)
+    C5 = cross_validate_method(METHODS_, 'Neural_Network', feat, lab, folds=5)
+    C6 = cross_validate_method(METHODS_, 'LSTM_model', feat, lab, folds=5)
+
+    comp = [C1, C2, C3, C4, C5, C6]
+    perf_names = ["ACC", "PRE", "REC", "F1score"]
+    # file name creation
+    file_names = [f'{name}.npy' for name in perf_names]
+    for j in range(0, len(perf_names)):
+        new = []
+        for i in range(len(comp)):
+            new.append(comp[i][j])
+        np.save(file_names[j], np.array(new))
+
+if __name__ == "__main__":
+    Preprocessing()
+    Analysis()
+    Plot_graphs()
